@@ -1,0 +1,40 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# ---- Build / packaging artifacts (大, 不入库) ----
+build/
+dist/
+*.zip
+*.log
+*.spec.bak
+
+# ---- 运行输出 / 工作目录 (生成物, 非源码) ----
+modeler/_work/
+tests/_*_out/
+tests/_md_*/
+项目_*/
+计算书_*.md
+计算书_*.docx
+配筋图_*
+三维*.svg
+*.bak
+~$*
+
+# ---- 内部开发文档 (不公开) ----
+progress.md
+docs/plans/
+迁移指南_HANDOFF.md
+01_问题域地图.md
+02_实现计划_Plan.md
+CLAUDE.md
+
+# ---- IDE / OS ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

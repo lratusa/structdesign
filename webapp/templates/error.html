@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}计算出错 · structdesign{% endblock %}
+{% block content %}
+<div class="result-head">
+  <h1>计算出错</h1>
+  <a class="btn" href="{{ url_for('index') }}">← 返回修改参数</a>
+</div>
+<div class="verdict bad">计算过程中抛出异常。多为参数组合超出原型适用范围（如墙位无效、规模过大）。请调整后重试。</div>
+<section class="card">
+  <h2>参数</h2>
+  <pre class="trace">{{ params }}</pre>
+</section>
+<section class="card">
+  <h2>错误堆栈</h2>
+  <pre class="trace">{{ tb }}</pre>
+</section>
+{% endblock %}

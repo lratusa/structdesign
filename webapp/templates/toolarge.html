@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}模型过大 · structdesign{% endblock %}
+{% block content %}
+<div class="result-head">
+  <h1>模型规模超出界面上限</h1>
+  <a class="btn primary" href="{{ url_for('index') }}">← 返回减小规模</a>
+</div>
+<div class="verdict bad">
+  当前模型约 <b>{{ nodes }}</b> 个节点，超过界面上限 <b>{{ max_nodes }}</b>。
+  内核为稠密杆系有限元，耗时随节点数陡增（{{ max_nodes }} 节点已约需 20–30 秒），
+  再大会让浏览器长时间转圈。请减小 <b>跨数 / 层数</b> 后重试。
+</div>
+<section class="card">
+  <h2>建议</h2>
+  <ul>
+    <li>节点数 ≈ (nx+1)×(ny+1)×(nz+1)。当前 ({{ p.nx }}+1)×({{ p.ny }}+1)×({{ p.nz }}+1) = {{ nodes }}。</li>
+    <li>界面适合<strong>方案级快速试算</strong>（如默认 3×3×12 ≈ 10 秒）。</li>
+    <li>需要更大模型，请用命令行：<code>python demo_project_3d.py</code>（可在源码里改参数，不受界面上限约束）。</li>
+  </ul>
+</section>
+{% endblock %}

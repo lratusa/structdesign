@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}structdesign 结构设计{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="{{ url_for('index') }}">structdesign</a>
+    <span class="tagline">智能结构设计软件 · 方案/初步设计 · GB 50010/50011/50009 · JGJ 3</span>
+  </header>
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="foot">
+    研发原型，计算结果须由注册结构工程师复核签字；施工图最终须商业三维软件复核。
+  </footer>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

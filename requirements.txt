@@ -1,0 +1,11 @@
+# structdesign 运行依赖（建议 Python 3.9）
+numpy>=1.21
+matplotlib>=3.4
+PyQt5>=5.15
+ezdxf>=1.0
+plotly>=5.0
+
+# 可选：
+#   anthropic        # 启用 AI 助手的 LLM 智能对话（不装则用内置本地中文意图解析，离线可用）
+#   外部工具 pandoc   # 把计算书转 Word(.docx)；未装则只出 Markdown
+#   外部工具 ODA File Converter  # 直接导入原生 .dwg；未装请改用 .dxf

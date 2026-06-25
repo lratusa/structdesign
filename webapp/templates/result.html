@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}计算结果 · structdesign{% endblock %}
+{% block content %}
+<div class="result-head">
+  <h1>计算结果</h1>
+  <a class="btn" href="{{ url_for('index') }}">← 返回修改参数</a>
+</div>
+
+<p class="subtitle">
+  {{ p.nx }}×{{ p.ny }} 跨 × {{ p.nz }} 层
+  {% if wall_cols %}框架-剪力墙{% else %}框架{% endif %}，
+  柱 {{ p.col_b|int }}×{{ p.col_h|int }}、梁 {{ p.beam_b|int }}×{{ p.beam_h|int }}
+  {% if wall_cols %}、墙 {{ p.wall_b|int }}×{{ p.wall_h|int }}（核心位置 {{ wall_cols }}）{% endif %}；
+  恒 {{ p.dead }} / 活 {{ p.live }} kN/m²，α_max={{ p.alpha_max }}、Tg={{ p.Tg }}s、{{ p.grade }}。
+</p>
+
+{% set all_ok = (out.n_bad == 0) and (checks | selectattr('3', 'equalto', false) | list | length == 0) %}
+<div class="verdict {{ 'ok' if all_ok else 'bad' }}">
+  {% if all_ok %}✔ 方案可行：规范强制指标全部满足，竖向构件全部满足。
+  {% else %}✗ 存在不满足项：请查看下方规范指标 / 构件判定（红色），需加大截面或调整体系。{% endif %}
+</div>
+
+<section class="metrics">
+  <div class="m"><span>Tx</span><b>{{ '%.2f'|format(out.Tx) }} s</b></div>
+  <div class="m"><span>Ty</span><b>{{ '%.2f'|format(out.Ty) }} s</b></div>
+  <div class="m"><span>Tt（扭转）</span><b>{{ '%.2f'|format(out.Tt) }} s</b></div>
+  <div class="m"><span>周期比 Tt/T1</span><b>{{ '%.3f'|format(out.period_ratio) }}</b></div>
+  <div class="m"><span>基底剪力 Vx</span><b>{{ '%.0f'|format(out.base_x/1000) }} kN</b></div>
+  <div class="m"><span>基底剪力 Vy</span><b>{{ '%.0f'|format(out.base_y/1000) }} kN</b></div>
+  <div class="m"><span>剪重比</span><b>{{ '%.2f'|format(out.shear_weight*100) }} %</b></div>
+  <div class="m"><span>位移比 X / Y</span><b>{{ '%.2f'|format(out.disp_ratio_x) }} / {{ '%.2f'|format(out.disp_ratio_y) }}</b></div>
+  <div class="m"><span>最大层间位移角</span><b>{% if out.drift_x > 0 %}1/{{ (1/out.drift_x)|round(0)|int }}{% else %}—{% endif %}</b></div>
+  <div class="m"><span>竖向构件 / 不足</span><b>{{ out.n_members }} / {{ out.n_bad }}</b></div>
+  <div class="m"><span>纵筋估算</span><b>{{ '%.1f'|format(out.total_steel_t) }} t</b></div>
+</section>
+
+<section class="card">
+  <h2>规范强制指标</h2>
+  <table class="tbl">
+    <thead><tr><th>指标</th><th>计算值</th><th>限值</th><th>判定</th></tr></thead>
+    <tbody>
+      {% for name, val, lim, ok in checks %}
+      <tr class="{{ 'rok' if ok else 'rbad' }}">
+        <td>{{ name }}</td><td>{{ val }}</td><td>{{ lim }}</td>
+        <td>{{ '✔ 满足' if ok else '✗ 不满足' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{% if figs %}
+<section class="card">
+  <h2>工程图</h2>
+  <div class="figs">
+    {% for name, caption in figs %}
+    <figure>
+      <a href="{{ url_for('static', filename='out/' + name) }}" target="_blank">
+        <img src="{{ url_for('static', filename='out/' + name) }}" alt="{{ caption }}">
+      </a>
+      <figcaption>{{ caption }}</figcaption>
+    </figure>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>专业计算书</h2>
+  <div class="actions">
+    {% if has_html %}<a class="btn primary" href="{{ url_for('static', filename='out/calcbook.html') }}" target="_blank">在线查看计算书</a>{% endif %}
+    {% if has_docx %}<a class="btn" href="{{ url_for('download', name='calcbook.docx') }}">下载 Word (.docx)</a>{% endif %}
+    {% if not has_html and not has_docx %}<span class="hint">未生成计算书文件（检查 pandoc）。</span>{% endif %}
+  </div>
+  {% if has_html %}<iframe class="book" src="{{ url_for('static', filename='out/calcbook.html') }}" title="计算书"></iframe>{% endif %}
+</section>
+
+<section class="card">
+  <h2>竖向构件配筋（柱 {{ cols|length }} · 墙 {{ walls|length }}）</h2>
+  <div class="scroll">
+    <table class="tbl">
+      <thead><tr><th>类型</th><th>编号</th><th>截面 (mm)</th><th>N (kN)</th><th>Mx (kN·m)</th><th>My (kN·m)</th><th>轴压比 μN</th><th>配筋 / 边缘构件</th><th>ρ</th><th>判定</th></tr></thead>
+      <tbody>
+        {% for m in cols + walls %}
+        <tr class="{{ 'rok' if m.ok else 'rbad' }}">
+          <td>{{ m.kind }}</td><td>{{ m.id }}</td><td>{{ m.sec }}</td>
+          <td>{{ '%.0f'|format(m.N) }}</td>
+          <td>{{ '%.1f'|format(m.get('Mx', 0)) }}</td>
+          <td>{{ '%.1f'|format(m.get('My', 0)) }}</td>
+          <td>{{ '%.3f'|format(m.mu) }}</td>
+          <td>{{ m.bars }}{% if m.get('vdist') %} + 分布{{ m.vdist }}{% endif %}</td>
+          <td>{% if m.get('rho') %}{{ '%.2f'|format(m.rho*100) }}%{% else %}—{% endif %}</td>
+          <td>{{ '✔' if m.ok else '✗' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+{% if beams %}
+<section class="card">
+  <details>
+    <summary>梁配筋（{{ beams|length }} 根，点击展开）</summary>
+    <div class="scroll">
+      <table class="tbl">
+        <thead><tr><th>编号</th><th>截面 (mm)</th><th>弯矩 M (kN·m)</th><th>As (mm²)</th><th>配筋</th><th>判定</th></tr></thead>
+        <tbody>
+          {% for m in beams %}
+          <tr class="{{ 'rok' if m.ok else 'rbad' }}">
+            <td>{{ m.id }}</td><td>{{ m.sec }}</td>
+            <td>{{ '%.1f'|format(m.M) }}</td>
+            <td>{{ '%.0f'|format(m.get('As', 0)) }}</td>
+            <td>{{ m.bars }}</td>
+            <td>{{ '✔' if m.ok else '✗' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </details>
+</section>
+{% endif %}
+
+<div class="actions"><a class="btn" href="{{ url_for('index') }}">← 返回修改参数</a></div>
+{% endblock %}

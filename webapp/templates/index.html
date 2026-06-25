@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}参数输入 · structdesign{% endblock %}
+{% block content %}
+<h1>三维一键结构设计</h1>
+<p class="lead">填写结构参数 → 自动三维分析（刚性楼盖模态 / 双向反应谱 CQC / P-Δ）→ 自动配筋（柱双偏压 · 墙肢 · 梁）→ 出工程图与专业计算书。</p>
+
+<form method="post" action="{{ url_for('run') }}" id="form">
+  <section class="card">
+    <h2>几何</h2>
+    <div class="grid">
+      <label>X 向跨数 nx <input type="number" name="nx" min="1" max="6" value="{{ d.nx }}" required></label>
+      <label>Y 向跨数 ny <input type="number" name="ny" min="1" max="6" value="{{ d.ny }}" required></label>
+      <label>层数 nz <input type="number" name="nz" min="1" max="20" value="{{ d.nz }}" required></label>
+      <label>X 向跨度 bx (mm) <input type="number" name="bx" step="100" value="{{ d.bx }}" required></label>
+      <label>Y 向跨度 by (mm) <input type="number" name="by" step="100" value="{{ d.by }}" required></label>
+      <label>层高 hz (mm) <input type="number" name="hz" step="100" value="{{ d.hz }}" required></label>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>截面 (mm)</h2>
+    <div class="grid">
+      <label>柱 b <input type="number" name="col_b" step="50" value="{{ d.col_b }}" required></label>
+      <label>柱 h <input type="number" name="col_h" step="50" value="{{ d.col_h }}" required></label>
+      <label>梁 b <input type="number" name="beam_b" step="50" value="{{ d.beam_b }}" required></label>
+      <label>梁 h <input type="number" name="beam_h" step="50" value="{{ d.beam_h }}" required></label>
+    </div>
+    <div class="grid">
+      <label class="check"><input type="checkbox" name="wall" {% if d.wall %}checked{% endif %}> 设置核心墙（中央 2×2 网格）</label>
+      <label>墙厚 b <input type="number" name="wall_b" step="50" value="{{ d.wall_b }}"></label>
+      <label>墙肢长 h <input type="number" name="wall_h" step="100" value="{{ d.wall_h }}"></label>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>荷载 (kN/m²)</h2>
+    <div class="grid">
+      <label>恒载 dead <input type="number" name="dead" step="0.5" value="{{ d.dead }}" required></label>
+      <label>活载 live <input type="number" name="live" step="0.5" value="{{ d.live }}" required></label>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>地震</h2>
+    <div class="grid">
+      <label>地震影响系数 α_max <input type="number" name="alpha_max" step="0.01" value="{{ d.alpha_max }}" required></label>
+      <label>特征周期 Tg (s) <input type="number" name="Tg" step="0.05" value="{{ d.Tg }}" required></label>
+      <label>抗震等级
+        <select name="grade">
+          {% for g in grades %}<option value="{{ g }}" {% if g==d.grade %}selected{% endif %}>{{ g }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>振型数 n_modes <input type="number" name="n_modes" min="3" max="18" value="{{ d.n_modes }}" required></label>
+    </div>
+  </section>
+
+  <div class="actions">
+    <button type="submit" class="btn primary" id="submitBtn">开始计算</button>
+    <span class="hint">默认 3×3×12 约需 10 秒；规模越大越慢（界面上限约 400 节点）。</span>
+  </div>
+</form>
+
+<div id="overlay" class="overlay">
+  <div class="spinner"></div>
+  <p>正在三维分析与配筋计算 … 已用时 <b id="elapsed">0</b> 秒</p>
+  <p class="warn">请勿刷新或关闭本页面，计算完成后会自动跳转结果页。</p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.getElementById('form').addEventListener('submit', function () {
+    var btn = document.getElementById('submitBtn');
+    btn.disabled = true; btn.textContent = '计算中 …';
+    document.getElementById('overlay').classList.add('show');
+    var t0 = Date.now();
+    setInterval(function () {
+      document.getElementById('elapsed').textContent = Math.round((Date.now() - t0) / 1000);
+    }, 250);
+  });
+</script>
+{% endblock %}
