@@ -24,16 +24,22 @@ def _selftest():
         from modeler.run.analyze import analyze
         from modeler.io.dxf_export import export_plan
         from modeler import view3d
+        from modeler.project import Wall, Slab
         B = 7000; xs = [0, B, 2 * B]; ys = [0, B, 2 * B]
         cols = [Column(x, y, 600, 600) for x in xs for y in ys]
-        beams = ([Beam(xs[i], y, xs[i + 1], y, 300, 600) for y in ys for i in range(2)]
-                 + [Beam(x, ys[k], x, ys[k + 1], 300, 600) for x in xs for k in range(2)])
+        beams = ([Beam(xs[i], y, xs[i + 1], y, 300, 650) for y in ys for i in range(2)]
+                 + [Beam(x, ys[k], x, ys[k + 1], 300, 650) for x in xs for k in range(2)])
+        slabs = [Slab(xs[i], ys[k], xs[i + 1], ys[k + 1], 120) for i in range(2) for k in range(2)]
         p = Project(grid=Grid(xs, ys),
-                    floor=StandardFloor(columns=cols, beams=beams, walls=[], slab=SlabLoad(6, 2.5)),
+                    floor=StandardFloor(columns=cols, beams=beams, walls=[Wall(B, B, 2 * B, B, 300)],
+                                        slabs=slabs, slab=SlabLoad(6, 2.5)),
                     storeys=[Storey(3600, 4)], seismic=Seismic(n_modes=6))
         r = analyze(p, out)
+        # 出图(含新版图框/标题栏/平法通长筋腰筋/墙边缘大样/板B-T)
         export_plan(p, r, os.path.join(out, "plan.dxf"),
                     os.path.join(out, "plan.png"), os.path.join(out, "plan.pdf"))
+        from modeler.io.dxf_export import export_slab_plan as _esp
+        _esp(p, r, os.path.join(out, "slab.dxf"), os.path.join(out, "slab.png"))
         view3d.export_html(p, r, os.path.join(out, "v3d.html"), "util")
         view3d.export_png(p, r, os.path.join(out, "v3d.png"), "disp")
         # 新功能模块的冻结环境冒烟(确保 hiddenimport 齐全：钢结构/地区/识别/命令/基础/板施工图)

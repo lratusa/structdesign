@@ -382,11 +382,22 @@ def analyze(project, out_dir, light=False) -> Result:
             ok = f_pos.ok and f_neg.ok and shear_ok and As / (bb * (bh - 40)) <= 0.025
             conc["beam"] += bb * bh * (L * 1000.0)
             slong["beam"] += dt.steel_kg(As_top + As_bot, L)
+            # 平法集中标注用：上部通长筋(2根角筋) + 侧面腰筋(GB 50010 9.2.13: 腹板高 hw≥450 设构造腰筋)
+            d_top = int(getattr(bars_top, "d", 20))
+            thru = f"2D{d_top}"
+            import math as _m2
+            hw = bh - 100.0
+            if hw >= 450.0:
+                As_side = 0.001 * bb * hw                       # 每侧构造腰筋面积
+                n_side = max(int(_m2.ceil(As_side / 113.1)), int(_m2.ceil(hw / 200.0)) - 1, 1)
+                waist = f"G{2*n_side}D12"
+            else:
+                waist = ""
             members.append(dict(id=mid, kind="梁", sec=f"{int(bb)}×{int(bh)}",
                                 N=0, M=max(M_pos, M_neg), As=As, bars=bars_top.label(), ok=ok,
                                 As_top=As_top, As_bot=As_bot, beam_kind=kind_b,
                                 bars_top=bars_top.label(), bars_bot=bars_bot.label(),
-                                stirrup=stir))
+                                thru=thru, waist=waist, stirrup=stir))
 
     # 设计规则：梁纵筋"取大包罗"(envelope)——同截面组内统一取最大上/下纵筋，便于施工(同时影响计算与出图)
     pol = getattr(project, "policy", None)
@@ -405,6 +416,7 @@ def analyze(project, out_dir, light=False) -> Result:
                 mm["bars_bot"] = bot.get("bars_bot", mm.get("bars_bot"))
                 mm["As"] = max(mm.get("As_top", 0.0), mm.get("As_bot", 0.0))
                 mm["bars"] = mm["bars_top"]
+                mm["thru"] = top.get("thru", mm.get("thru", "2D20"))   # 通长筋随上部筋归并
 
     n_vert = len([m for m in members if m["kind"] in ("柱", "墙")])
     n_bad = sum(0 if m["ok"] else 1 for m in members)

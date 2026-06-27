@@ -115,7 +115,9 @@ def _beam_schedule(beams_r):
     """跨构件钢筋归并：相同(截面+上/下纵筋+箍筋)的梁 → 同一 KL 编号。返回表行。"""
     groups, order = {}, []
     for m in beams_r.values():
-        gkey = (m["sec"], m.get("bars_top", "-"), m.get("bars_bot", "-"), m.get("stirrup", "-"))
+        thru = m.get("thru", "")
+        top = (f"{thru}/{m.get('bars_top','-')}" if thru else m.get("bars_top", "-"))
+        gkey = (m["sec"], top, m.get("bars_bot", "-"), m.get("stirrup", "-"))
         if gkey not in groups:
             groups[gkey] = dict(sec=gkey[0], top=gkey[1], bot=gkey[2], stir=gkey[3], n=0)
             order.append(gkey)
@@ -139,31 +141,40 @@ def export_plan(project, result, dxf_path, png_path=None, pdf_path=None, with_re
 
     doc = ezdxf.new(setup=True)
     msp = doc.modelspace()
-    for name, c in [("AXIS", C_AXIS), ("COLUMN", C_COL), ("BEAM", C_BEAM),
-                    ("WALL", C_WALL), ("SLAB", 4), ("TEXT", 7), ("TABLE", 7), ("TITLE", 7)]:
-        if name not in doc.layers:
-            doc.layers.add(name, color=c)
-
     gx = sorted(project.grid.x) or sorted({round(c.x) for c in fl.columns})
     gy = sorted(project.grid.y) or sorted({round(c.y) for c in fl.columns})
     x0, x1 = (min(gx), max(gx)) if gx else (0, 0)
     y0, y1 = (min(gy), max(gy)) if gy else (0, 0)
     span = max(x1 - x0, y1 - y0, 1000)
-    H = span / 80.0
-    bub = span / 26.0
-    off = bub * 2.2
+    H = span / 90.0          # 字高(略减, 更清爽)
+    bub = span / 28.0
+    off = bub * 2.4
+    # 轴线点画线比例(让点画线在 mm 图上可见)
+    doc.header["$LTSCALE"] = max(span / 260.0, 12.0)
+    AX = (150, 150, 165)     # 轴线: 暗灰蓝(不抢眼)
+    for name, c, lt in [("AXIS", 8, "CENTER"), ("COLUMN", C_COL, "CONTINUOUS"),
+                        ("BEAM", C_BEAM, "CONTINUOUS"), ("WALL", C_WALL, "CONTINUOUS"),
+                        ("SLAB", 4, "CONTINUOUS"), ("SBOT", 3, "CONTINUOUS"),
+                        ("STOP", 1, "CONTINUOUS"), ("TEXT", 7, "CONTINUOUS"),
+                        ("TABLE", 7, "CONTINUOUS"), ("TITLE", 7, "CONTINUOUS"),
+                        ("FRAME", 7, "CONTINUOUS")]:
+        if name not in doc.layers:
+            try:
+                doc.layers.add(name, color=c, linetype=lt)
+            except Exception:
+                doc.layers.add(name, color=c)
 
-    # 轴网 + 轴号
+    # 轴网 + 轴号(点画线、暗色)
     for i, x in enumerate(gx):
-        msp.add_line((x, y0 - off), (x, y1 + off), dxfattribs={"layer": "AXIS"})
+        msp.add_line((x, y0 - off), (x, y1 + off), dxfattribs={"layer": "AXIS", "color": 8})
         for yy in (y0 - off, y1 + off):
-            msp.add_circle((x, yy), bub, dxfattribs={"layer": "AXIS"})
-            _txt(msp, x, yy, str(i + 1), bub, "AXIS", (255, 120, 120))
+            msp.add_circle((x, yy), bub, dxfattribs={"layer": "AXIS", "color": 8, "linetype": "CONTINUOUS"})
+            _txt(msp, x, yy, str(i + 1), bub * 0.9, "AXIS", AX)
     for k, y in enumerate(gy):
-        msp.add_line((x0 - off, y), (x1 + off, y), dxfattribs={"layer": "AXIS"})
+        msp.add_line((x0 - off, y), (x1 + off, y), dxfattribs={"layer": "AXIS", "color": 8})
         for xx in (x0 - off, x1 + off):
-            msp.add_circle((xx, y), bub, dxfattribs={"layer": "AXIS"})
-            _txt(msp, xx, y, chr(ord("A") + k), bub, "AXIS", (255, 120, 120))
+            msp.add_circle((xx, y), bub, dxfattribs={"layer": "AXIS", "color": 8, "linetype": "CONTINUOUS"})
+            _txt(msp, xx, y, chr(ord("A") + k), bub * 0.9, "AXIS", AX)
 
     # 楼板（轮廓 + LB 编号 + 底筋；详见板表）
     slabs = getattr(result, "slabs", []) if result else []
@@ -172,10 +183,13 @@ def export_plan(project, result, dxf_path, png_path=None, pdf_path=None, with_re
         ws = abs(sd["x2"] - sd["x1"]); hs = abs(sd["y2"] - sd["y1"])
         msp.add_lwpolyline([(x0s, y0s), (x0s + ws, y0s), (x0s + ws, y0s + hs), (x0s, y0s + hs)],
                            close=True, dxfattribs={"layer": "SLAB"})
-        _txt(msp, x0s + ws / 2, y0s + hs / 2 + H * 0.7,
-             f"{sd['name']} h{sd['t']}", H * 0.85, "SLAB", RGB_W)
-        _txt(msp, x0s + ws / 2, y0s + hs / 2 - H * 0.7,
-             f"X:{sd['bars_x']} Y:{sd['bars_y']}", H * 0.7, "SLAB", (160, 210, 255))
+        _txt(msp, x0s + ws / 2, y0s + hs / 2 + H * 0.9,
+             f"{sd['name']} h={sd['t']}", H * 0.85, "SLAB", RGB_W)
+        # 平法 B/T 注写：B=板底贯通筋, T=支座板面负筋
+        _txt(msp, x0s + ws / 2, y0s + hs / 2 - H * 0.2,
+             f"B:X{sd['bars_x']} Y{sd['bars_y']}", H * 0.7, "SBOT", (150, 240, 160))
+        _txt(msp, x0s + ws / 2, y0s + hs / 2 - H * 1.3,
+             f"T:{sd.get('bars_x_top', sd['bars_x'])}", H * 0.7, "STOP", (255, 175, 95))
 
     # 墙（Q 编号，详见墙表；端部绘边缘构件区段）
     wname_of, wrows = _wall_schedule(project, walls_r)
@@ -208,12 +222,11 @@ def export_plan(project, result, dxf_path, png_path=None, pdf_path=None, with_re
         nm = name_of.get((str(round(c.x)), str(round(c.y))), f"{int(c.b)}x{int(c.h)}")
         _txt(msp, c.x, c.y, nm, H * 0.95, "COLUMN", RGB_Y)
 
-    # 柱表（plan 下方）
+    # ---- 明细表（plan 下方，左列依次堆叠；表宽限制为 0.62·span 以便右侧放说明） ----
+    tw_tbl = span * 0.62
     tbl_top = y0 - off - bub * 3.2
-    _draw_col_table(msp, rows, x0, tbl_top, span, H)
+    _draw_col_table(msp, rows, x0, tbl_top, tw_tbl, H)
     cur = tbl_top - (len(rows) + 2) * (H * 2.3) - H * 3.0
-
-    # 板表（柱表下方，按 LB 编号归并）
     if slabs:
         seen, srows = set(), []
         for sd in slabs:
@@ -221,46 +234,55 @@ def export_plan(project, result, dxf_path, png_path=None, pdf_path=None, with_re
                 seen.add(sd["name"])
                 srows.append((sd["name"], f"{int(sd['Lx']*1000)}x{int(sd['Ly']*1000)}",
                               sd["t"], sd["kind"], sd["bars_x"], sd["bars_y"], sd["qty"]))
-        scw = [span * f for f in (0.10, 0.18, 0.08, 0.12, 0.16, 0.16, 0.10)]
+        scw = [tw_tbl * f for f in (0.10, 0.18, 0.08, 0.12, 0.16, 0.16, 0.10)]
         _table(msp, x0, cur, scw, H, "SLAB SCHEDULE / 板表",
                ["Mark", "LxxLy", "h", "Type", "X-btm", "Y-btm", "Qty"], srows)
         cur = cur - (len(srows) + 2) * (H * 2.3) - H * 3.0
-
-    # 墙表（墙身分布筋 + 边缘构件）
     if wrows:
-        wcw = [span * f for f in (0.09, 0.16, 0.18, 0.18, 0.17, 0.10, 0.08)]
+        wcw = [tw_tbl * f for f in (0.09, 0.16, 0.18, 0.18, 0.17, 0.10, 0.08)]
         _table(msp, x0, cur, wcw, H, "WALL SCHEDULE / 墙表 (Q: bw x lw)",
                ["Mark", "bw x lw", "V-dist", "H-dist", "Edge bars", "n_ratio", "Qty"], wrows)
         cur = cur - (len(wrows) + 2) * (H * 2.3) - H * 3.0
-
-    # 梁表（跨构件钢筋归并：相同截面+配筋的梁同编号 KL#）
     brows = _beam_schedule(beams_r)
     if brows:
-        bcw = [span * f for f in (0.09, 0.15, 0.22, 0.22, 0.22, 0.10)]
+        bcw = [tw_tbl * f for f in (0.10, 0.15, 0.24, 0.21, 0.20, 0.10)]
         _table(msp, x0, cur, bcw, H,
-               f"BEAM SCHEDULE / 梁表 (consolidated: {len(beams_r)} beams -> {len(brows)} marks)",
-               ["Mark", "b x h", "Top", "Bottom", "Stirrup", "Qty"], brows)
+               f"BEAM SCHEDULE / 梁表 ({len(beams_r)}->{len(brows)} marks)",
+               ["Mark", "b x h", "Top thru+supt", "Bottom", "Stirrup", "Qty"], brows)
         cur = cur - (len(brows) + 2) * (H * 2.3) - H * 3.0
-
-    # 截面大样（plan 右侧，KZ 各型 + 代表梁 KL）
-    rep_beam = None
-    if beams_r:
-        rep_beam = max(beams_r.values(), key=lambda m: m.get("As", 0))
-    _draw_sections(msp, rows, rep_beam, x1 + off + span * 0.16, y1, span / 7.0, H)
-
-    # 材料统计表（柱表下方）
     tk = getattr(result, "takeoff", None) if result else None
     if tk:
-        _draw_takeoff_table(msp, tk, x0, cur, span, H)
+        _draw_takeoff_table(msp, tk, x0, cur, tw_tbl, H)
+        cur = cur - (9 + 2) * (H * 2.2) - H * 3.0
+    tables_bottom = cur
+
+    # ---- 设计说明（右列，与表格不重叠） ----
     nt = getattr(result, "notes", None) if result else None
     if nt:
-        _draw_notes(msp, nt, x0 + span * 0.55, tbl_top, H)
+        _draw_notes(msp, nt, x0 + tw_tbl + span * 0.04, tbl_top, H)
 
-    # ASCII 标题（CAD 用；预览另叠中文）
+    # ---- 截面大样 + 墙边缘构件大样（plan 右侧） ----
+    rep_beam = max(beams_r.values(), key=lambda m: m.get("As", 0)) if beams_r else None
+    sec_x = x1 + off + span * 0.18
+    cell = span / 7.0
+    _draw_sections(msp, rows, rep_beam, sec_x, y1, cell, H)
+    sec_bottom = y1 - (len(rows) + 1) * cell * 1.9 - cell
+    if wrows:
+        _draw_wall_edge(msp, wrows, sec_x, sec_bottom, cell, H)
+        sec_bottom -= cell * 1.9
+
+    # ---- 图名 + 图框 + 标题栏 ----
     n_floors = project.total_floors()
     sys_ = "Frame-Wall" if fl.walls else "Frame"
-    _txt(msp, (x0 + x1) / 2, y1 + off + bub * 2.2,
-         f"REINFORCEMENT PLAN (Std Floor)  {sys_}  {n_floors}F   unit: mm", H * 1.2, "TITLE", RGB_W)
+    _txt(msp, (x0 + x1) / 2, y1 + off + bub * 2.0,
+         f"REINFORCEMENT PLAN (Std Floor)  {sys_}  {n_floors}F   unit: mm", H * 1.3, "TITLE", RGB_W)
+    L = x0 - off - bub * 1.6
+    R = sec_x + cell * 0.8
+    T = y1 + off + bub * 3.4
+    Bm = min(tables_bottom, sec_bottom) - bub * 0.6
+    _frame_titleblock(msp, L, Bm, R, T, H,
+                      title="结构配筋平面图（标准层）",
+                      proj=f"{'框架-剪力墙' if fl.walls else '框架'}结构 {n_floors}层", dwg_no="结施-01")
 
     doc.saveas(dxf_path)
 
@@ -305,9 +327,13 @@ def export_slab_plan(project, result, dxf_path, png_path=None, pdf_path=None):
         for fx in (0.35, 0.65):
             msp.add_line((xa + ws * fx, ya + hs * 0.06), (xa + ws * fx, ya + hs * 0.94),
                          dxfattribs={"layer": "SBOT"})
-        _txt(msp, xa + ws / 2, ya + hs / 2 + H * 0.9, f"{sd['name']} h{sd['t']}", H, "SLAB", RGB_W)
-        _txt(msp, xa + ws / 2, ya + hs / 2 - H * 0.5,
-             f"btm X:{sd['bars_x']} Y:{sd['bars_y']}", H * 0.72, "SBOT", (150, 240, 160))
+        _txt(msp, xa + ws / 2, ya + hs / 2 + H * 1.0, f"{sd['name']} h={sd['t']}", H, "SLAB", RGB_W)
+        # 平法 B(板底贯通)
+        _txt(msp, xa + ws / 2, ya + hs / 2 - H * 0.2,
+             f"B:X{sd['bars_x']} Y{sd['bars_y']}", H * 0.72, "SBOT", (150, 240, 160))
+        # 平法 T(支座板面负筋)
+        _txt(msp, xa + ws / 2, ya + hs / 2 - H * 1.3,
+             f"T:{sd.get('bars_x_top', sd['bars_x'])}", H * 0.72, "STOP", (255, 175, 95))
         # 支座负筋(板面)：四边各画一条伸入跨内 L/4 的线 + 端部下弯钩 + 标注
         qx, qy = ws * 0.25, hs * 0.25
         bxt = sd.get("bars_x_top", sd["bars_x"]); byt = sd.get("bars_y_top", sd["bars_y"])
@@ -333,7 +359,12 @@ def export_slab_plan(project, result, dxf_path, png_path=None, pdf_path=None):
                ["Mark", "LxxLy", "h", "Type", "X-btm", "Y-btm", "Top", "Qty"], srows)
 
     _txt(msp, (x0 + x1) / 2, y1 + off + bub * 2.2,
-         "SLAB REINFORCEMENT PLAN  (btm: green, top/support: orange)  unit: mm", H * 1.2, "TITLE", RGB_W)
+         "SLAB REINFORCEMENT PLAN  (B: bottom=green, T: support/top=orange)  unit: mm", H * 1.3, "TITLE", RGB_W)
+    # 图框 + 标题栏
+    tb_top = (y0 - off - bub * 3.2)
+    _frame_titleblock(msp, x0 - off - bub * 1.6, min(tb_top - bub * 8, y0 - off - bub * 9),
+                      x1 + off + bub * 1.6, y1 + off + bub * 3.4, H,
+                      title="结构楼板配筋施工图", proj="标准层楼板", dwg_no="结施-02")
     doc.saveas(dxf_path)
     if png_path or pdf_path:
         try:
@@ -361,15 +392,19 @@ def _draw_beams(msp, fl, beams_r, H):
             segs.sort(key=lambda t: min(t[1].x1, t[1].x2))
         elif key[0] == "V":
             segs.sort(key=lambda t: min(t[1].y1, t[1].y2))
-        # 集中标注（连续梁一次）：KLn(跨数) bxh 箍筋
+        # 集中标注（连续梁一次，平法）：KLn(跨数) b×h / 箍筋 / 上部通长筋 [/ G腰筋]
         bi0, b0 = segs[0]
-        m0 = beams_r.get(str(bi0))
+        m0 = beams_r.get(str(bi0)) or {}
         sec = f"{int(b0.b)}x{int(b0.h)}"
-        stir = (m0.get("stirrup", "A8@100/200(2)") if m0 else "A8@100/200(2)")
+        stir = m0.get("stirrup", "A8@100/200(2)")
+        thru = m0.get("thru", "2D20")
+        waist = m0.get("waist", "")
         px, py = _perp(b0)
         cx, cy = (b0.x1 + b0.x2) / 2, (b0.y1 + b0.y2) / 2
-        _txt(msp, cx + px * H * 3.0, cy + py * H * 3.0,
-             f"KL{kl}({len(segs)}) {sec} {stir}", H * 0.95, "BEAM", RGB_G)
+        line1 = f"KL{kl}({len(segs)}) {sec} {stir} {thru}"
+        _txt(msp, cx + px * H * 3.2, cy + py * H * 3.2, line1, H * 0.9, "BEAM", RGB_G)
+        if waist:                      # 腰筋另起一行(平法 G/N 行)
+            _txt(msp, cx + px * H * 4.6, cy + py * H * 4.6, waist, H * 0.8, "BEAM", (150, 220, 170))
         # 逐跨：跨中下部筋 + 支座上部负筋
         for bi, b in segs:
             msp.add_line((b.x1, b.y1), (b.x2, b.y2), dxfattribs={"layer": "BEAM"})
@@ -432,6 +467,42 @@ def _section_box(msp, ax, ay, b, h, cell, label, sub, kind="col", top="", bot=""
     Ht = cell / 9.0
     _txt(msp, ax, ay - hh / 2 - Ht * 1.6, label, Ht * 1.2, "TEXT", RGB_W)
     _txt(msp, ax, ay - hh / 2 - Ht * 3.2, sub, Ht * 0.95, "TEXT", RGB_G)
+
+
+def _frame_titleblock(msp, L, B, R, T, H, title="结构施工图", proj="", dwg_no="结施-01"):
+    """图框(粗边框) + 右下角标题栏(图名/工程/比例/日期/图号)。"""
+    lw = max((R - L) * 0.0012, 6.0)
+    msp.add_lwpolyline([(L, B), (R, B), (R, T), (L, T)], close=True,
+                       dxfattribs={"layer": "FRAME", "const_width": lw})
+    # 内边线(细)
+    pad = (T - B) * 0.012
+    msp.add_lwpolyline([(L + pad, B + pad), (R - pad, B + pad), (R - pad, T - pad), (L + pad, T - pad)],
+                       close=True, dxfattribs={"layer": "FRAME"})
+    # 标题栏(右下)
+    tw = min((R - L) * 0.34, (R - L) - 2 * pad)
+    rh = H * 2.6
+    nrow = 5
+    tx0, ty0 = R - pad - tw, B + pad
+    for r in range(nrow + 1):
+        msp.add_line((tx0, ty0 + r * rh), (R - pad, ty0 + r * rh), dxfattribs={"layer": "FRAME"})
+    msp.add_line((tx0, ty0), (tx0, ty0 + nrow * rh), dxfattribs={"layer": "FRAME"})
+    msp.add_line((tx0 + tw * 0.34, ty0), (tx0 + tw * 0.34, ty0 + nrow * rh), dxfattribs={"layer": "FRAME"})
+    rowsTB = [("图号", dwg_no), ("日期", "—"), ("比例", "NTS"), ("图名", title), ("工程", proj)]
+    for i, (k, v) in enumerate(rowsTB):
+        yy = ty0 + (i + 0.5) * rh
+        _txt(msp, tx0 + tw * 0.17, yy, k, H * 0.85, "FRAME", RGB_W)
+        _txt(msp, tx0 + tw * 0.34 + (tw * 0.66) / 2, yy, v, H * 0.9, "FRAME", RGB_Y)
+
+
+def _draw_wall_edge(msp, wrows, ax, ay, cell, H):
+    """墙边缘构件(GBZ/YBZ)大样：取代表墙肢，画约束边缘构件截面 + 纵筋 + 箍筋示意。"""
+    if not wrows:
+        return
+    name, sec, vd, hd, edge, mu, qty = wrows[0]
+    bw, lw = _parse_sec(sec)
+    lc = max(bw, 400)                      # 边缘构件长度(示意)
+    _txt(msp, ax, ay + cell * 0.75, "EDGE MEMBER / 边缘构件(GBZ)", cell / 8.0, "TEXT", RGB_W)
+    _section_box(msp, ax, ay, lc, bw, cell, f"GBZ ({name})", f"{edge}  A8@100", kind="col")
 
 
 def _draw_sections(msp, rows, rep_beam, ax, ay_top, cell, H):
@@ -611,6 +682,7 @@ def export_foundation(project, result, dxf_path, png_path=None, pdf_path=None, f
         scw = [span * f for f in (0.10, 0.14, 0.12, 0.20, 0.18, 0.10)]
         _table(msp, x0, cur, scw, H, "STRIP FOOTING / 条形基础表 (TJ)",
                ["Mark", "B(mm)", "h(mm)", "Rebar", "q(kN/m)", "Qty"], srows)
+        cur = cur - (len(srows) + 2) * (H * 2.3) - H * 3.0
 
     # 典型基础剖面大样（右侧）
     if rows:
@@ -618,9 +690,14 @@ def export_foundation(project, result, dxf_path, png_path=None, pdf_path=None, f
 
     n_floors = project.total_floors()
     _txt(msp, (x0 + x1) / 2, y1 + off + bub * 2.2,
-         f"FOUNDATION PLAN  fak={fak:.0f} kPa   unit: mm", H * 1.2, "TITLE", RGB_W)
+         f"FOUNDATION PLAN  fak={fak:.0f} kPa   unit: mm", H * 1.3, "TITLE", RGB_W)
     _txt(msp, x0, y1 + off + bub * 0.8,
          f"基础选型建议：{rec['kind']}（{rec['reason']}）", H * 0.9, "TEXT", RGB_G, align="MIDDLE_LEFT")
+    if "FRAME" not in doc.layers:
+        doc.layers.add("FRAME", color=7)
+    _frame_titleblock(msp, x0 - off - bub * 1.6, cur - bub * 2, x1 + off + span * 0.40,
+                      y1 + off + bub * 3.4, H, title="基础平面布置图",
+                      proj=f"fak={fak:.0f}kPa {rec['kind']}", dwg_no="结施-03")
     doc.saveas(dxf_path)
     cn = f"基础平面布置图（柱下独立基础）　fak={fak:.0f} kPa"
     if png_path or pdf_path:

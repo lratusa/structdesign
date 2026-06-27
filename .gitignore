@@ -38,3 +38,6 @@ CLAUDE.md
 .idea/
 .DS_Store
 Thumbs.db
+
+# 介绍配图的 DXF 渲染副产物
+docs/intro/img/*.dxf
