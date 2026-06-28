@@ -354,30 +354,20 @@ def _mode_nodal_disp(model, modal, j):
 
 
 def _pick_mode_column(modal, which):
-    """选振型列号 j。which: '扭转'/'X'/'Y' 或 int 阶号。返回 (j, 描述)。"""
-    import numpy as np
-    floors = modal.floors; dr = modal.dyn_red
-    allx = []  # 各列分类
-    R = 1.0
-    cols = modal.modes_dyn.shape[1]
-    info = []
-    for j in range(cols):
-        phi = modal.modes_dyn[:, j]
-        sx = sum(abs(phi[dr[("UX", f)]]) for f in floors)
-        sy = sum(abs(phi[dr[("UY", f)]]) for f in floors)
-        st = sum(abs(phi[dr[("RZ", f)]]) for f in floors)
-        T = modal.periods_all[j]
-        kind = "扭转" if st * 1.0 > (sx ** 2 + sy ** 2) ** 0.5 else ("X" if sx >= sy else "Y")
-        info.append((j, kind, T))
+    """选振型列号 j。which: '扭转'/'X'/'Y' 或 int 阶号。
+    直接采用 modal3d 的**权威分类**(modal.modes，与周期比同源)，再按周期匹配到 modes_dyn 列。"""
+    pa = modal.periods_all
+    order = sorted(range(len(pa)), key=lambda k: -pa[k])      # 周期降序
     if isinstance(which, int):
-        return which, f"第{which+1}阶"
-    # 取该类别中周期最长者
-    cand = [t for t in info if t[1] == which]
-    if not cand:
-        cand = info
-    cand.sort(key=lambda t: -t[2])
-    j = cand[0][0]
-    return j, f"{which}向振型 T={cand[0][2]:.2f}s"
+        j = order[min(which, len(order) - 1)]
+        return j, f"第{which+1}阶 T={pa[j]:.2f}s"
+    target = next((md for md in modal.modes if md.kind == which), None)
+    if target is None and modal.modes:
+        target = modal.modes[0]
+    P = target.period if target else (pa[order[0]] if order else 0.0)
+    j = min(range(len(pa)), key=lambda k: abs(pa[k] - P))     # 周期最接近的列
+    label = {"扭转": "第一扭转振型", "X": "X向第一平动振型", "Y": "Y向第一平动振型"}.get(which, which)
+    return j, f"{label} T={P:.2f}s"
 
 
 def export_mode_animation(project, result, path, which="扭转", n_frames=24):
@@ -388,7 +378,13 @@ def export_mode_animation(project, result, path, which="扭转", n_frames=24):
     from structdesign.analysis.modal3d import rigid_diaphragm_modal
     from structdesign.frame3d_builder import floor_masses
     model, meta = build_with_meta(project)
-    fm = floor_masses(model, 1.0)
+    # 真实楼层质量(与 analyze 同量级)→ 真实周期 + 正确振型分类
+    zkeys = list(floor_masses(model, 1.0).keys())
+    axx = [n.x for n in model.nodes.values()]; ayy = [n.y for n in model.nodes.values()]
+    area = max((max(axx) - min(axx)) / 1000.0 * (max(ayy) - min(ayy)) / 1000.0, 1.0)
+    sl = project.floor.slab
+    mpf = max((sl.dead + 0.5 * sl.live) * area * 100, 3e5)
+    fm = {z: mpf for z in zkeys}
     modal = rigid_diaphragm_modal(model, fm)
     j, desc = _pick_mode_column(modal, which)
     disp = _mode_nodal_disp(model, modal, j)

@@ -135,6 +135,35 @@ def _perp(b):
     return (-dy / L, dx / L)
 
 
+def _rev_cloud(msp, x0, y0, x1, y1, r, layer="FAIL"):
+    """修订云线（不达标处常用标识）：沿矩形外框画外凸圆弧串(bulge)，红色。"""
+    import math
+    pts = []
+
+    def edge(ax, ay, bx, by):
+        L = math.hypot(bx - ax, by - ay)
+        n = max(int(L / (1.6 * r)), 1)
+        for k in range(n):
+            t = k / n
+            pts.append((ax + (bx - ax) * t, ay + (by - ay) * t))
+    edge(x0, y0, x1, y0); edge(x1, y0, x1, y1)
+    edge(x1, y1, x0, y1); edge(x0, y1, x0, y0)        # CCW
+    poly = [(px, py, 0.0, 0.0, 0.5) for (px, py) in pts]   # bulge=0.5 外凸
+    try:
+        msp.add_lwpolyline(poly, format="xyseb", close=True,
+                           dxfattribs={"layer": layer, "color": 1})
+    except Exception:
+        msp.add_lwpolyline([(p[0], p[1]) for p in pts], close=True,
+                           dxfattribs={"layer": layer, "color": 1})
+
+
+def _mark_fail(msp, x0, y0, x1, y1, note, H):
+    """云线 + 红色引注，标识一处不达标。"""
+    pad = H * 1.0
+    _rev_cloud(msp, x0 - pad, y0 - pad, x1 + pad, y1 + pad, H * 0.9)
+    _txt(msp, (x0 + x1) / 2, y1 + pad + H * 1.1, note, H * 0.9, "FAIL", (255, 70, 70))
+
+
 def export_plan(project, result, dxf_path, png_path=None, pdf_path=None, with_rebar=True):
     fl = project.floor
     cols_r, beams_r, walls_r = _governing(result, with_rebar)
@@ -157,7 +186,7 @@ def export_plan(project, result, dxf_path, png_path=None, pdf_path=None, with_re
                         ("SLAB", 4, "CONTINUOUS"), ("SBOT", 3, "CONTINUOUS"),
                         ("STOP", 1, "CONTINUOUS"), ("TEXT", 7, "CONTINUOUS"),
                         ("TABLE", 7, "CONTINUOUS"), ("TITLE", 7, "CONTINUOUS"),
-                        ("FRAME", 7, "CONTINUOUS")]:
+                        ("FRAME", 7, "CONTINUOUS"), ("FAIL", 1, "CONTINUOUS")]:
         if name not in doc.layers:
             try:
                 doc.layers.add(name, color=c, linetype=lt)
@@ -221,6 +250,36 @@ def export_plan(project, result, dxf_path, png_path=None, pdf_path=None, with_re
             close=True, dxfattribs={"layer": "COLUMN"})
         nm = name_of.get((str(round(c.x)), str(round(c.y))), f"{int(c.b)}x{int(c.h)}")
         _txt(msp, c.x, c.y, nm, H * 0.95, "COLUMN", RGB_Y)
+
+    # ---- 不达标构件标识（修订云线 + 红色引注；承载力/构造不满足处） ----
+    n_fail = 0
+    for c in fl.columns:
+        m = cols_r.get((str(round(c.x)), str(round(c.y))))
+        if m and not m.get("ok", True):
+            nm = name_of.get((str(round(c.x)), str(round(c.y))), "KZ")
+            rs = f"{nm} 轴压比{m.get('mu',0):.2f}超限" if m.get("mu", 0) > 0.85 else f"{nm} 配筋超限"
+            _mark_fail(msp, c.x - c.b / 2, c.y - c.h / 2, c.x + c.b / 2, c.y + c.h / 2, rs, H)
+            n_fail += 1
+    for w in fl.walls:
+        mx, my = (w.x1 + w.x2) / 2, (w.y1 + w.y2) / 2
+        m = walls_r.get((str(round(mx)), str(round(my))))
+        if m and not m.get("ok", True):
+            wxa, wya = min(w.x1, w.x2) - w.t, min(w.y1, w.y2) - w.t
+            wxb, wyb = max(w.x1, w.x2) + w.t, max(w.y1, w.y2) + w.t
+            _mark_fail(msp, wxa, wya, wxb, wyb,
+                       f"{wname_of.get((str(round(mx)),str(round(my))),'Q')} 轴压比超限", H)
+            n_fail += 1
+    for bi, b in enumerate(fl.beams):
+        m = beams_r.get(str(bi))
+        if m and not m.get("ok", True):
+            bxa, bya = min(b.x1, b.x2), min(b.y1, b.y2)
+            bxb, byb = max(b.x1, b.x2), max(b.y1, b.y2)
+            _mark_fail(msp, bxa - H, bya - H, bxb + H, byb + H, "KL 承载力超限", H)
+            n_fail += 1
+    if n_fail:
+        _txt(msp, x0, y0 - off - bub * 1.2,
+             f"▲ 红色云线处 {n_fail} 个构件承载力/构造不满足，需加大截面或配筋（详见计算书）",
+             H * 0.95, "FAIL", (255, 70, 70), align="MIDDLE_LEFT")
 
     # ---- 明细表（plan 下方，左列依次堆叠；表宽限制为 0.62·span 以便右侧放说明） ----
     tw_tbl = span * 0.62

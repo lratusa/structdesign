@@ -42,6 +42,7 @@ def _selftest():
         _esp(p, r, os.path.join(out, "slab.dxf"), os.path.join(out, "slab.png"))
         view3d.export_html(p, r, os.path.join(out, "v3d.html"), "util")
         view3d.export_png(p, r, os.path.join(out, "v3d.png"), "disp")
+        view3d.export_mode_animation(p, r, os.path.join(out, "v3d_torsion.html"), "扭转")  # 地震扭转动画
         # 新功能模块的冻结环境冒烟(确保 hiddenimport 齐全：钢结构/地区/识别/命令/基础/板施工图)
         from structdesign.codes import gb50017_steel as _st
         _st.check_steel_beam("HN400x200", 200, 80, 6000, grade="Q355")
