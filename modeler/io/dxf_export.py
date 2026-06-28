@@ -874,12 +874,32 @@ def export_stair(stair, dxf_path, png_path=None, pdf_path=None):
     return dxf_path, png_path, pdf_path
 
 
+def _set_cjk_style(doc):
+    """把 DXF 文字样式指向中文字体，避免出图中文显示为方框(ezdxf 出图后端按文字样式找字体)。"""
+    import os
+    cands = ["msyh.ttc", "msyhl.ttc", "simhei.ttf", "simsun.ttc", "simkai.ttf",
+             "Microsoft YaHei", "SimHei", "SimSun"]
+    winf = os.path.join(os.environ.get("WINDIR", r"C:\\Windows"), "Fonts")
+    font = next((f for f in cands if os.path.exists(os.path.join(winf, f))), cands[0])
+    for sname in (list(doc.styles) if hasattr(doc, "styles") else []):
+        try:
+            sname.dxf.font = font
+        except Exception:
+            pass
+    try:
+        doc.styles.get("Standard").dxf.font = font
+    except Exception:
+        pass
+    return font
+
+
 def _render(doc, msp, png_path, pdf_path, cn_title=""):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     plt.rcParams["font.sans-serif"] = ["Microsoft YaHei", "SimHei", "SimSun", "DejaVu Sans"]
     plt.rcParams["axes.unicode_minus"] = False
+    _set_cjk_style(doc)                    # 关键：DXF 文字用中文字体
     from ezdxf.addons.drawing import RenderContext, Frontend
     from ezdxf.addons.drawing.matplotlib import MatplotlibBackend
     fig = plt.figure(figsize=(11.5, 13), facecolor="black")

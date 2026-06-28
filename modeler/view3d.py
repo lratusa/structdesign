@@ -429,6 +429,51 @@ def export_mode_animation(project, result, path, which="扭转", n_frames=24):
 _QUADS = [(0, 1, 2, 3), (4, 5, 6, 7), (0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7)]
 
 
+def export_mode_png(project, path, which="扭转"):
+    """振型**峰值变形**静态 PNG（matplotlib）：用于说明书/计算书展示扭转/平动振型形态。"""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+    from structdesign.analysis.modal3d import rigid_diaphragm_modal
+    from structdesign.frame3d_builder import floor_masses
+    model, meta = build_with_meta(project)
+    zk = list(floor_masses(model, 1.0).keys())
+    axx = [n.x for n in model.nodes.values()]; ayy = [n.y for n in model.nodes.values()]
+    area = max((max(axx) - min(axx)) / 1000.0 * (max(ayy) - min(ayy)) / 1000.0, 1.0)
+    sl = project.floor.slab
+    mpf = max((sl.dead + 0.5 * sl.live) * area * 100, 3e5)
+    modal = rigid_diaphragm_modal(model, {z: mpf for z in zk})
+    j, desc = _pick_mode_column(modal, which)
+    disp = _mode_nodal_disp(model, modal, j)
+    span = max((n.x for n in model.nodes.values()), default=1) or 1.0
+    umax = max((math.hypot(disp[i][0], disp[i][1]) for i in disp), default=1.0) or 1.0
+    scale = 0.12 * max(span, max((n.z for n in model.nodes.values()), default=1)) / umax
+    KCOL = {"柱": "#d83a3a", "梁": "#1a9e5a", "墙": "#1f6feb"}
+    fig = plt.figure(figsize=(9, 8)); ax = fig.add_subplot(111, projection="3d")
+    polys, fcs = [], []
+    for mid in model.members:
+        vd = _member_prism(model, meta, mid, disp, scale)
+        for q in _QUADS:
+            polys.append([vd[i] for i in q])
+        fcs += [KCOL.get(meta[mid]["kind"], "#888")] * 6
+    ax.add_collection3d(Poly3DCollection(polys, facecolors=fcs,
+                        edgecolors=(0, 0, 0, 0.3), linewidths=0.2))
+    xs = [n.x for n in model.nodes.values()]; ys = [n.y for n in model.nodes.values()]
+    zs = [n.z for n in model.nodes.values()]
+    ax.set_xlim(min(xs), max(xs)); ax.set_ylim(min(ys), max(ys)); ax.set_zlim(min(zs), max(zs))
+    try:
+        ax.set_box_aspect((max(xs) - min(xs) + 1, max(ys) - min(ys) + 1, max(zs) - min(zs) + 1))
+    except Exception:
+        pass
+    ax.view_init(elev=22, azim=-60)
+    en = {"扭转": "Torsional", "X": "X-translation", "Y": "Y-translation"}.get(which, "Mode")
+    Tval = desc.split("T=")[-1] if "T=" in desc else ""
+    ax.set_title(f"{en} mode shape (peak)  T={Tval}", fontsize=15, fontweight="bold")
+    fig.savefig(path, dpi=140); plt.close(fig)
+    return path
+
+
 def export_png(project, result, path, mode="model"):
     """matplotlib 三维实体 PNG（离线，不需浏览器/kaleido），供嵌入计算书或快速预览。"""
     import matplotlib
