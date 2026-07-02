@@ -10,7 +10,11 @@ import re
 from .codes.registry import all_rules
 
 
-_STOP = {"", "the", "a", "of", "in", "to", "is"}
+_STOP = {"", "the", "a", "of", "in", "to", "is",
+         # 中文通用/连接性 2-gram(规范文本样板词，无检索信号——防"影响/计算"等 boilerplate 造成无出处误命中)
+         "影响", "计算", "作用", "考虑", "要求", "规定", "采用", "进行", "确定",
+         "应按", "可按", "以及", "之间", "相应", "一般", "情况", "时应", "并考",
+         "虑长", "长期", "期作", "用影"}
 
 
 def _terms(text: str):

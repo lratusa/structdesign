@@ -36,6 +36,20 @@ def test_jurisdiction_filter():
     assert r["answered"] and all(h["rule_id"].startswith("EU") for h in r["hits"])
 
 
+def test_serviceability_rules_retrievable():
+    """新增正常使用极限状态条文(挠度/裂缝/锚固)可检索且附出处。"""
+    for kw, clause in [("挠度限值", "3.4.3"), ("裂缝宽度", "3.4.5"), ("锚固长度", "8.3.1")]:
+        r = ask(kw)
+        assert r["answered"], f"{kw} 应能检索到"
+        assert any(h["clause"] == clause for h in r["hits"]), f"{kw} 未命中 {clause}: {[h['clause'] for h in r['hits']]}"
+
+
+def test_generic_word_alone_not_answer():
+    """仅靠样板词(如'影响'/'计算')不应命中——守护'无出处不作答'。"""
+    r = ask("影响 计算 作用")
+    assert r["answered"] is False
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     ok = 0

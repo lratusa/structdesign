@@ -155,4 +155,60 @@ RULES_CN_GB = [
                           "grade": "二级", "intensity": "8", "mu": 0.5},
               "expect": {"mu_lim": 0.5, "verdict": True}},
     ),
+    # ---- 正常使用极限状态(serviceability)：裂缝 / 挠度 / 锚固。非强条，待分析层供数后自动参与构件级校核 ----
+    Rule(
+        rule_id="CN.GB50010-2010(2015).3.4.3",
+        title="受弯构件挠度限值",
+        concept="deflection",
+        scope={"element": ["beam"], "material": "reinforced_concrete"},
+        formula={
+            # 表3.4.3：l0<7m 取 l0/200，7~9m 取 l0/250，>9m 取 l0/300（跨度 span 单位 mm）
+            "assign": ["defl_lim = span/200.0 if span < 7000 else "
+                       "(span/250.0 if span <= 9000 else span/300.0)"],
+            "verdict": "deflection <= defl_lim",
+        },
+        provenance={"text_zh": "受弯构件的最大挠度应按荷载准永久组合并考虑长期作用影响计算，"
+                               "不应超过表3.4.3的限值(l0<7m:l0/200；7~9m:l0/250；>9m:l0/300)。",
+                    "clause": "3.4.3", "page": 33, "mandatory": False},
+        lineage={"effective": "2015-09-01"},
+        test={"inputs": {"element": "beam", "material": "reinforced_concrete",
+                          "span": 6000, "deflection": 20.0},
+              "expect": {"defl_lim": 30.0, "verdict": True}},   # 6000/200
+    ),
+    Rule(
+        rule_id="CN.GB50010-2010(2015).3.4.5",
+        title="最大裂缝宽度限值",
+        concept="crack_width",
+        scope={"element": ["beam"], "material": "reinforced_concrete"},
+        formula={
+            # 表3.4.5：一类环境 wlim=0.3mm，二/三类环境 0.2mm（裂缝控制等级三级构件）
+            "assign": ["w_lim = 0.3 if exposure=='一类' else 0.2"],
+            "verdict": "w_max <= w_lim",
+        },
+        provenance={"text_zh": "钢筋混凝土构件的最大裂缝宽度计算值不应超过表3.4.5规定的限值"
+                               "(一类环境0.3mm；二a/二b/三a/三b环境0.2mm)。",
+                    "clause": "3.4.5", "page": 34, "mandatory": False},
+        lineage={"effective": "2015-09-01"},
+        test={"inputs": {"element": "beam", "material": "reinforced_concrete",
+                          "exposure": "二a", "w_max": 0.15},
+              "expect": {"w_lim": 0.2, "verdict": True}},
+    ),
+    Rule(
+        rule_id="CN.GB50010-2010(2015).8.3.1",
+        title="受拉钢筋基本锚固长度",
+        concept="anchorage_length",
+        scope={"element": ["beam", "column"], "material": "reinforced_concrete"},
+        formula={
+            # lab = α·(fy/ft)·d，普通带肋钢筋 α=0.14；且不小于 200mm。la_provided 为实配锚固长度
+            "assign": ["la_req = max(0.14*(fy/ft)*d, 200)"],
+            "verdict": "la_provided >= la_req",
+        },
+        provenance={"text_zh": "受拉钢筋的基本锚固长度 lab=α(fy/ft)d，普通带肋钢筋α取0.14；"
+                               "受拉钢筋锚固长度不应小于200mm。",
+                    "clause": "8.3.1", "page": 95, "mandatory": False},
+        lineage={"effective": "2015-09-01"},
+        test={"inputs": {"element": "beam", "material": "reinforced_concrete",
+                          "fy": 360, "ft": 1.43, "d": 20, "la_provided": 750},
+              "expect": {"la_req": 704.9, "verdict": True}},   # 0.14*(360/1.43)*20≈704.9
+    ),
 ]
