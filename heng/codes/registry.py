@@ -6,8 +6,10 @@ from .rules_cn_gb import RULES_CN_GB
 from .rules_cn_sl_nb import RULES_CN_SL_NB
 from .rules_jp import RULES_JP
 from .rules_eu_ec import RULES_EU_EC
+from .rules_us import RULES_US
 
-_ALL: List[Rule] = list(RULES_CN_GB) + list(RULES_CN_SL_NB) + list(RULES_JP) + list(RULES_EU_EC)
+_ALL: List[Rule] = (list(RULES_CN_GB) + list(RULES_CN_SL_NB) + list(RULES_JP)
+                    + list(RULES_EU_EC) + list(RULES_US))
 REGISTRY = {r.rule_id: r for r in _ALL}
 
 

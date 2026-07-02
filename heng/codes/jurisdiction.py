@@ -54,8 +54,8 @@ _TABLE = {
         jurisdiction="US",
         codes=["ASCE 7", "ACI 318", "AISC 360"],
         mandatory=[],
-        review_process="AHJ plan review",
-        note="规范条文库待补(Phase 3 北美包)。"),
+        review_process="AHJ plan review（属地建管部门审查）",
+        note="首批 ACI 318-19/ASCE 7-22 条文已入库；全量(含 AISC 360)属 Phase 3 北美包。"),
 }
 
 
