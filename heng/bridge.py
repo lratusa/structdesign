@@ -89,9 +89,12 @@ def member_check(m: dict, project, jurisdiction: str = "CN") -> dict:
         res = check(r, ctx)
         if res.applicable and not res.error and res.ok is not None:
             out.append(res)
+    # 控制条文标注(§6.2)：哪条规范最卡这个构件
+    from .governing import governing_clause
+    gov = governing_clause(ctx, jurisdiction)["governing"]
     return dict(id=m.get("id"), kind=m.get("kind"), sec=m.get("sec"),
                 results=out, ok=all(x.ok for x in out) if out else True,
-                n_rules=len(out))
+                n_rules=len(out), governing=gov)
 
 
 def member_scan(result, project, jurisdiction: str = "CN") -> dict:

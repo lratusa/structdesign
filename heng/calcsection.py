@@ -37,12 +37,15 @@ def compliance_section(result, project, jurisdiction: str = "CN") -> str:
     L.append(f"共校核构件 {len(ms['members'])} 个，构件级条文判定 {ms['n_checks']} 次，"
              f"不满足构件 {len(ms['failed'])} 个。")
     if ms["failed"]:
-        L.append("\n不满足构件（可溯源到具体条文）：\n")
-        L.append("| 构件 | 截面 | 违反条文 |")
-        L.append("|------|------|----------|")
+        L.append("\n不满足构件（可溯源到具体条文，并标注控制条文）：\n")
+        L.append("| 构件 | 截面 | 违反条文 | 控制条文(哪条卡住它) |")
+        L.append("|------|------|----------|----------------------|")
         for m in ms["failed"][:20]:
             bad = [f"`{x.rule_id}`（{x.provenance.get('clause','')}）" for x in m["results"] if not x.ok]
-            L.append(f"| {m['id']} | {m.get('sec','')} | {'；'.join(bad)} |")
+            g = m.get("governing")
+            gov = (f"{g['title']}（{g['clause']}，利用率 {g['criticality']*100:.0f}%）"
+                   if g else "—")
+            L.append(f"| {m['id']} | {m.get('sec','')} | {'；'.join(bad)} | {gov} |")
     L.append("")
 
     # 强条自查
