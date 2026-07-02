@@ -288,6 +288,8 @@ class MainWindow(QtWidgets.QMainWindow):
         act(tb, "🔧 钢结构", self._steel_toolbox, "型钢梁/柱按 GB 50017 验算")
         act(tb, "🏛 规范审查", self._heng_review,
             "「衡」规范引擎：逐条溯源校核 + 送审强条自查表(每个判定→rule_id条文锚点)")
+        act(tb, "⚖ 方案比选", self._scheme_compare,
+            "生成式方案比选：围绕当前截面生成多方案 → 多目标 Pareto 前沿 + 推荐(§6.2)")
 
     def _build_right_dock(self):
         dock = QtWidgets.QDockWidget("参数 / 属性", self)
@@ -1343,6 +1345,42 @@ class MainWindow(QtWidgets.QMainWindow):
             f"<b>{'✔ 全部成立' if gb['all_pass'] else '✗ 存在不成立'}</b>（§6.1 AI 宪法）<br>"
             f"送审快照：<code>{pkg['ssm_commit']}</code>（{'已签名' if pkg['signed'] else '未签名·AI起草待确认'}）<br><br>"
             f"逐条溯源审查表已生成，每个判定可点击溯源至 rule_id 条文原文。")
+        QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(fp))
+
+    def _scheme_compare(self):
+        """生成式方案比选(§6.2)：围绕当前截面生成多方案 → 多目标 Pareto 前沿 + 推荐。"""
+        if not self.project.edit_floor().columns:
+            QtWidgets.QMessageBox.information(self, "提示", "请先建立模型（一键轴网或手动放柱/梁）。")
+            return
+        self._sync_params()
+        cb, ch = self.col_b.value(), self.col_h.value()
+        bb, bh = self.beam_b.value(), self.beam_h.value()
+        # 围绕当前截面按比例生成 4 个方案(0.7/1.0/1.3/1.6×)，步进取整到 50mm
+        def q(v, k): return max(200, int(round(v * k / 50.0)) * 50)
+        variants = [(f"{int(k*100)}%", (q(cb, k), q(ch, k)), (max(200, q(bb, (1+k)/2)), q(bh, k)))
+                    for k in (0.7, 1.0, 1.3, 1.6)]
+        prog = QtWidgets.QProgressDialog("正在生成并分析多方案 …", None, 0, 0, self)
+        prog.setWindowModality(QtCore.Qt.WindowModal); prog.setCancelButton(None); prog.show()
+        QtWidgets.QApplication.processEvents()
+        try:
+            from heng import scheme
+            rep = scheme.compare_schemes(self.project, variants)
+            md = scheme.render_markdown(rep)
+            out = os.path.dirname(self.result.calcbook_md) if (self.result and self.result.calcbook_md) else os.getcwd()
+            fp = os.path.join(out, "方案比选_Pareto.md")
+            with open(fp, "w", encoding="utf-8") as f:
+                f.write(md)
+        except Exception:
+            prog.close()
+            QtWidgets.QMessageBox.critical(self, "方案比选出错", traceback.format_exc()[-1500:])
+            return
+        prog.close()
+        QtWidgets.QMessageBox.information(
+            self, "生成式方案比选",
+            f"生成方案 {rep['n_variants']} 个（各为一 SSM 分支），可行 {rep['n_feasible']} 个<br>"
+            f"Pareto 前沿：<b>{'、'.join(rep['pareto']) or '（无可行方案）'}</b><br>"
+            f"推荐方案（满足全部规范且用钢量最小）：<b>{rep['recommend'] or '无——需放宽边界或调布置'}</b><br><br>"
+            f"多目标比选表（用钢量/混凝土量/位移角/周期比/规范）已生成。")
         QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(fp))
 
     # ---------- 存读 ----------
