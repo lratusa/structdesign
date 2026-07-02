@@ -91,4 +91,65 @@ RULES_CN_GB = [
         test={"inputs": {"element": "structure", "intensity": "8", "shear_weight": 0.035},
               "expect": {"lam_min": 0.032, "verdict": True}},
     ),
+
+    # ---------------- 构件级配筋校核（柱/墙/梁） ----------------
+    Rule(
+        rule_id="CN.GB50011-2010(2016).6.3.7",
+        title="框架柱全部纵向钢筋最小配筋率",
+        scope={"element": ["column"], "material": "reinforced_concrete"},
+        formula={
+            "assign": ["rho_min = 0.009 if grade=='一级' else 0.007 if grade=='二级' "
+                       "else 0.006 if grade=='三级' else 0.005"],
+            "verdict": "rho >= rho_min",
+        },
+        provenance={"text_zh": "抗震设计时框架柱全部纵向受力钢筋的最小配筋百分率(表6.3.7-1，中/边柱)。",
+                    "clause": "6.3.7", "page": 59, "mandatory": True},
+        lineage={"effective": "2016-08-01"},
+        test={"inputs": {"element": "column", "material": "reinforced_concrete",
+                          "grade": "二级", "rho": 0.012},
+              "expect": {"rho_min": 0.007, "verdict": True}},
+    ),
+    Rule(
+        rule_id="CN.GB50010-2010(2015).9.3.1",
+        title="柱全部纵向钢筋最大配筋率",
+        scope={"element": ["column"], "material": "reinforced_concrete"},
+        formula={"verdict": "rho <= 0.05"},
+        provenance={"text_zh": "柱中全部纵向钢筋的配筋率不宜大于 5%。",
+                    "clause": "9.3.1", "page": 105, "mandatory": False},
+        lineage={"effective": "2015-09-01"},
+        test={"inputs": {"element": "column", "material": "reinforced_concrete", "rho": 0.03},
+              "expect": {"verdict": True}},
+    ),
+    Rule(
+        rule_id="CN.GB50010-2010(2015).6.3.1",
+        title="受弯构件斜截面受剪截面限制条件(剪压比)",
+        scope={"element": ["beam"], "material": "reinforced_concrete"},
+        formula={
+            # hw/b ≤ 4：V ≤ 0.25·βc·fc·b·h0（βc≤C50 取1.0），单位 kN
+            "assign": ["Vlim = 0.25*betac*fc*b*h0/1000"],
+            "verdict": "V <= Vlim",
+        },
+        provenance={"text_zh": "矩形截面受弯构件，当 hw/b≤4 时，其受剪截面应满足 V≤0.25βcfcbh0。",
+                    "clause": "6.3.1", "page": 61, "mandatory": True},
+        lineage={"effective": "2015-09-01"},
+        test={"inputs": {"element": "beam", "material": "reinforced_concrete",
+                          "betac": 1.0, "fc": 14.3, "b": 300, "h0": 660, "V": 200},
+              "expect": {"Vlim": 707.85, "verdict": True}},   # 0.25*1*14.3*300*660/1000
+    ),
+    Rule(
+        rule_id="CN.GB50011-2010(2016).6.4.2",
+        title="剪力墙墙肢轴压比限值",
+        scope={"element": ["wall"], "material": "reinforced_concrete"},
+        formula={
+            "assign": ["mu_lim = 0.4 if (grade=='一级' and intensity=='9') else "
+                       "(0.5 if (grade=='一级' or grade=='二级') else 0.6)"],
+            "verdict": "mu <= mu_lim",
+        },
+        provenance={"text_zh": "一、二、三级剪力墙墙肢的轴压比不宜超过表6.4.2的限值(一级9度0.4/一二级0.5/三级0.6)。",
+                    "clause": "6.4.2", "page": 62, "mandatory": False},
+        lineage={"effective": "2016-08-01"},
+        test={"inputs": {"element": "wall", "material": "reinforced_concrete",
+                          "grade": "二级", "intensity": "8", "mu": 0.5},
+              "expect": {"mu_lim": 0.5, "verdict": True}},
+    ),
 ]
