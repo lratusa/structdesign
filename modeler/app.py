@@ -286,6 +286,8 @@ class MainWindow(QtWidgets.QMainWindow):
         # 工具
         tb = group("工具")
         act(tb, "🔧 钢结构", self._steel_toolbox, "型钢梁/柱按 GB 50017 验算")
+        act(tb, "🏛 规范审查", self._heng_review,
+            "「衡」规范引擎：逐条溯源校核 + 送审强条自查表(每个判定→rule_id条文锚点)")
 
     def _build_right_dock(self):
         dock = QtWidgets.QDockWidget("参数 / 属性", self)
@@ -1300,6 +1302,38 @@ class MainWindow(QtWidgets.QMainWindow):
             QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(path))
         else:
             QtWidgets.QMessageBox.information(self, "提示", "未找到计算书文件。")
+
+    def _heng_review(self):
+        """「衡」规范引擎：逐条溯源校核章节 + 送审强条自查表(玻璃盒·每判定→条文锚点)。"""
+        if not self.result:
+            QtWidgets.QMessageBox.information(self, "提示", "请先计算。")
+            return
+        try:
+            self._sync_params()
+            from heng.review import review_package, render_markdown
+            from heng.calcsection import compliance_section
+            jur = getattr(self.project, "jurisdiction", "CN")
+            pkg = review_package(self.result, self.project, jur)      # 送审包(未签名=AI起草)
+            md = (render_markdown(pkg) + "\n\n---\n\n"
+                  + compliance_section(self.result, self.project, jur))
+            out = (os.path.dirname(self.result.calcbook_md)
+                   if self.result.calcbook_md else os.getcwd())
+            fp = os.path.join(out, "规范审查_强条自查表.md")
+            with open(fp, "w", encoding="utf-8") as f:
+                f.write(md)
+        except Exception:
+            QtWidgets.QMessageBox.critical(self, "规范审查出错", traceback.format_exc()[-1500:])
+            return
+        n = len(pkg["mandatory"]["rows"])
+        bad = sum(1 for r in pkg["mandatory"]["rows"] if not r["verdict"])
+        head = ("⚠ <b>存在强制性条文不满足（红线），不得送审</b>" if pkg["red_line"]
+                else "✔ 强制性条文全部满足")
+        QtWidgets.QMessageBox.information(
+            self, "「衡」规范审查",
+            f"辖区 <b>{pkg['jurisdiction']}</b>　强条自查 {n} 项，不满足 {bad} 项<br>{head}<br>"
+            f"送审快照：<code>{pkg['ssm_commit']}</code>（{'已签名' if pkg['signed'] else '未签名·AI起草待确认'}）<br><br>"
+            f"逐条溯源审查表已生成，每个判定可点击溯源至 rule_id 条文原文。")
+        QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(fp))
 
     # ---------- 存读 ----------
     def _save(self):

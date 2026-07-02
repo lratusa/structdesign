@@ -594,8 +594,16 @@ def analyze(project, out_dir, light=False) -> Result:
         checks_table=checks_table, steel_t=steel / 1000, figures=figs,
     )
     cb = os.path.join(out_dir, "计算书.md")
+    body = calcbook_pro.render(book_data)
+    # 「衡」规范引擎逐条溯源章节（玻璃盒·每个判定→rule_id条文锚点）。加法+崩溃隔离：绝不拖垮计算书。
+    try:
+        from heng.calcsection import compliance_section
+        body += "\n\n---\n\n" + compliance_section(
+            r_out, project, getattr(project, "jurisdiction", "CN"))
+    except Exception:
+        pass
     with open(cb, "w", encoding="utf-8") as f:
-        f.write(calcbook_pro.render(book_data))
+        f.write(body)
     docx = ""
     import shutil as _sh, subprocess as _sp
     if _sh.which("pandoc"):
