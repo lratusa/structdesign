@@ -1,0 +1,53 @@
+# 「衡 / HENG」重构计划 —— 从 structdesign 演进为多国规范智能结构计算平台
+
+> 依据 `衡-多国规范智能结构计算平台-产品设计书.md`。本文件是重构的活计划(survives compaction)。
+
+## 现状 → 五层架构 的映射（findings）
+| 产品层 | 设计书要求 | 现有 structdesign | 差距/动作 |
+|---|---|---|---|
+| L1 数据模型 SSM | 单一结构语义模型 + Git式版本化 + 审计日志 | `modeler/project.py`(Project/StandardFloor…) 是几何模型，非语义模型；无版本化 | 建 SSM seed：语义对象 + commit/branch/tag + 审计 |
+| L2 计算内核 | FEM/非线性/时程/耦合/GPU | `structdesign/analysis/frame3d,modal3d,rspectrum3d,pdelta` 自研杆系FEM+反应谱+P-Δ | 保留；后续接非线性/水工 |
+| **L3 规范引擎** | **Code-as-Data**：条文→规则记录(rule_id/scope/DSL formula/provenance/lineage)+受限DSL+每条附算例+CI+辖区解析+多国并行+NDP参数层 | `structdesign/codes/gb50010_*.py` 等**硬编码** checks | **核心重构**：把规范从代码剥离成数据。← 首先做 |
+| L4 智能层 | 玻璃盒协议(可溯源/可编辑/可复核/可关闭)+NL建模+规范RAG问答+方案比选+优化+审图助手 | `modeler/commands.py`(NL命令+run_llm)+AI对话+trace.py(留痕) | 扩展：接规范引擎做条文级问答/校核；玻璃盒 |
+| L5 交付层 | 计算书(多国样式)+图纸(平法/日式/欧式)+审查包+IFC | `dxf_export`(平法)+`calcbook_pro` | 保留；后续多国样式+审查包 |
+
+## 重构原则
+- **加法+不破坏**：现有 FEM/出图/GUI/测试(modeler 25+核心31)保持绿；新建 `heng/` 平台层，逐步把 codes 校核路由到规范引擎。
+- **验证驱动(项目铁律=设计书§4.1 CI要求)**：每条规则(Rule)附**官方算例/手算基准**为测试用例，`test_heng_rules.py` 全跑。
+- **确定性优先(设计书§4.3一级/§6.1)**：辖区解析、合规判定走确定性规则表，不用 AI；AI 只检索/起草/解释。
+- **多国**：rule_id = `辖区.规范-版本.条号`；NDP 用参数覆盖层(同一 EC 规则切国别只换参数集)。
+
+## 实施阶段（本项目内可落地的切片）
+- **P1 规范引擎 MVP(进行中)**：`heng/codes/{dsl,rule,registry,jurisdiction}.py` + 受限DSL(ast白名单,非图灵完备) + 首批 CN-GB 规则(最小配筋率/轴压比/剪重比/位移角…)从硬编码转 Rule + 每条测试用例。辖区解析器(CN/JP/EU/US 生效规范集,确定性)。多国并行校核骨架 + EC NDP 参数层示例。
+- **P2 SSM seed**：`heng/ssm.py` 语义模型 + Git式版本(commit/branch/tag/diff) + 审计日志。把 Project 投影进 SSM。
+- **P3 玻璃盒**：CheckResult 带 provenance(rule_id+中间量)；规范RAG问答接口(检索条文库,附出处,无出处不作答)。
+- **P4 交付**：计算书引用 rule_id 锚点；审查包(强条自查表)。
+- 远期(设计书 Phase2/3)：水工模块、日本包产品化、迁移器、方案比选。属大工程，逐步。
+
+## 进度
+### P1 规范引擎 MVP —— ✅ 核心完成(2026-07-03)
+新增 `heng/` 平台层：
+- `heng/codes/dsl.py`：受限声明式 DSL（ast 白名单、非图灵完备、可静态审计）。算术/比较/布尔/三元/查表(interp/lookup)/白名单数学函数；拒绝 import/属性/下标/推导式/任意调用。
+- `heng/codes/rule.py`：`Rule`(rule_id/scope/formula/provenance/lineage/test) + `CheckResult`(带溯源+全部中间量=玻璃盒) + `run_selftest`(规范库CI)。
+- `heng/codes/rules_cn_gb.py`：**6 条中国 GB 规则**由硬编码重构而来（最小配筋率8.5.1、轴压比6.3.6、层间位移角5.5.1、周期比3.4.5、位移比3.4.3、剪重比5.2.5），每条附手算基准。
+- `heng/codes/rules_eu_ec.py`：EC 规则（EN1992 最小配筋）演示 **NDP 参数覆盖层**。
+- `heng/codes/jurisdiction.py`：**辖区解析器**(确定性) CN/EU/JP/US → 生效规范集/强条/审查流程；EC National Annex NDP。
+- `heng/codes/registry.py`：注册表 + `check_all`/`scan`(全量条文扫描 + **强条红线**)。
+- `heng/bridge.py`：把 analyze 结果投影为 ctx，用规范引擎复现整体指标判定(带溯源)。
+- 测试(加入核心套件)：`test_heng_{dsl,rules,jurisdiction,bridge}.py` 共 20 项，全绿。含**规范库CI**(每条规则跑自带算例)、DSL安全、多国并行、NDP覆盖、**忠实性**(引擎复现硬编码判定)。
+
+**关键成果**：验证了"把规范从代码剥离成数据"是**等价重构**（引擎判定==原硬编码），并带来玻璃盒溯源；且发现原硬编码剪重比用固定1.6%，数据规则按GB表5.2.5按烈度取值(8度0.032)**更精确**。
+
+### P2 SSM seed —— ✅ 完成(2026-07-03)
+`heng/ssm.py`：单一结构语义模型 + **Git 式版本化**：内容寻址 commit / branch(方案比选) / 带签名 tag(送审) / **diff(自动修改对照表)** / 全量审计日志；`ssm_from_project` 把现有 Project 投影为 SSM。测试 `test_heng_ssm.py` 6/6。
+
+### 审查包 + 强条自查表 —— ✅ 完成(2026-07-03)
+`heng/review.py`(设计书 §8⑧/§10/§15，直连北极星"强条漏检=0")：`review_package`(签名SSM快照+生效规范集+全量扫描+强条自查表) + `render_markdown`(送审审查包·强条自查表) + **强条红线**(不满足则禁止送审) + **签名门禁**(未签名=AI起草待确认,不得进送审包)。测试 `test_heng_review.py` 4/4。
+
+**当前套件：modeler 25 文件 + core+heng 36 文件(原30+钢结构+heng 6文件30测试) 全绿。**
+
+### 下一步（roadmap 对齐）
+- 把 analyze.checks_table 正式改由 `heng_scan` 产出(带 rule_id 条文锚点)；计算书每个数字点击→依据链。
+- 扩 GB 强条(GB55 系列全文强制) + 柱/墙/梁**构件级**规则(单构件配筋校核入引擎)。
+- P3 玻璃盒：规范 RAG 问答接口(检索条文库,附出处,无出处不作答)。
+- 远期(设计书 Phase2/3)：水工规范包(SL/NB)、日本包、迁移器、方案比选、双规范逐构件对照报告。
