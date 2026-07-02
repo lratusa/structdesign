@@ -1312,12 +1312,14 @@ class MainWindow(QtWidgets.QMainWindow):
             self._sync_params()
             from heng.review import review_package, render_markdown
             from heng.calcsection import compliance_section
-            from heng import redline
+            from heng import redline, glassbox
             jur = getattr(self.project, "jurisdiction", "CN")
             pkg = review_package(self.result, self.project, jur)      # 送审包(未签名=AI起草)
             audit = redline.zero_miss_audit()                        # §15 辅助指标:强条漏检数
+            gb = glassbox.glassbox_audit()                           # §6.1 玻璃盒四条
             md = (render_markdown(pkg) + "\n\n---\n\n"
                   + redline.render_markdown(audit) + "\n\n---\n\n"
+                  + glassbox.render_markdown(gb) + "\n\n---\n\n"
                   + compliance_section(self.result, self.project, jur))
             out = (os.path.dirname(self.result.calcbook_md)
                    if self.result.calcbook_md else os.getcwd())
@@ -1337,6 +1339,8 @@ class MainWindow(QtWidgets.QMainWindow):
             f"引擎强条覆盖 {audit['mandatory_total']} 条，"
             f"<b>强条漏检数 = {audit['miss_count']}</b>"
             f"（{'✔ 零漏检达标' if audit['zero_miss'] else '✗ 未达标'}，§15 辅助北极星指标）<br>"
+            f"玻璃盒四条（可溯源/可编辑/可复核/可关闭）："
+            f"<b>{'✔ 全部成立' if gb['all_pass'] else '✗ 存在不成立'}</b>（§6.1 AI 宪法）<br>"
             f"送审快照：<code>{pkg['ssm_commit']}</code>（{'已签名' if pkg['signed'] else '未签名·AI起草待确认'}）<br><br>"
             f"逐条溯源审查表已生成，每个判定可点击溯源至 rule_id 条文原文。")
         QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(fp))
