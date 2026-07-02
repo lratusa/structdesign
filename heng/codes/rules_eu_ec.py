@@ -10,6 +10,7 @@ RULES_EU_EC = [
     Rule(
         rule_id="EU.EN1992-1-1.9.2.1.1",
         title="梁最小受拉配筋率(min reinforcement)",
+        concept="min_flexural_reinforcement",
         scope={"element": ["beam"], "material": "reinforced_concrete"},
         formula={
             # As,min/(bt·d) = max(k_c1·fctm/fyk, k_c2)；k_c1/k_c2 为 NDP(推荐 0.26/0.0013)

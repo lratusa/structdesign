@@ -18,6 +18,7 @@ class Rule:
     provenance: dict = field(default_factory=dict)   # {text_zh, clause, page, mandatory:bool}
     lineage: dict = field(default_factory=dict)      # {supersedes, superseded_by, effective}
     test: dict = field(default_factory=dict)         # {inputs:{...}, expect:{var:val,..., verdict:bool}}
+    concept: str = ""                                # 概念标签(跨国映射用，如 min_flexural_reinforcement)
 
     @property
     def jurisdiction(self) -> str:

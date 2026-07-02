@@ -10,6 +10,7 @@ RULES_CN_GB = [
     Rule(
         rule_id="CN.GB50010-2010(2015).8.5.1",
         title="纵向受力钢筋最小配筋率(受弯构件)",
+        concept="min_flexural_reinforcement",
         scope={"element": ["beam", "slab"], "material": "reinforced_concrete"},
         formula={
             "assign": ["rho_min = max(0.002, 0.45*ft/fy)"],
@@ -26,6 +27,7 @@ RULES_CN_GB = [
     Rule(
         rule_id="CN.GB50011-2010(2016).6.3.6",
         title="框架柱轴压比限值",
+        concept="column_axial_ratio",
         scope={"element": ["column"], "material": "reinforced_concrete"},
         formula={
             "assign": ["mu_lim = 0.65 if grade=='一级' else 0.75 if grade=='二级' "
