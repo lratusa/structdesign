@@ -59,9 +59,24 @@ _TABLE = {
 }
 
 
+_HYDRAULIC = {"gravity_dam", "sluice", "gate", "hydraulic", "水工", "dam", "水闸"}
+
+# 中国水工规范集(SL/NB)——设计书 §7
+_CN_HYDRAULIC = CodeSet(
+    jurisdiction="CN",
+    codes=["SL 191-2008(水工混凝土结构)", "SL 744-2016(水工建筑物荷载)",
+           "NB/T 35026-2014(混凝土重力坝)", "SL 265-2016(水闸)", "NB 35047-2015(水电工程抗震)"],
+    mandatory=["CN.NBT35026-2014.坝基抗滑稳定", "CN.SL265-2016.水闸抗浮", "CN.SL265-2016.水闸抗滑"],
+    review_process="水利部/能源局审查(强条零容忍) + 大坝安全专项",
+    note="水工规范包(SL/NB)；扬压力/浪压力/淤沙/冰压力自动进组合(后续)。")
+
+
 def resolve(country: str, structure_type: str = "building",
             commission: str = "design", na: str = None) -> CodeSet:
-    """确定性产出生效规范集。country: CN/EU/JP/US；na: EC 国别 National Annex(如 DE)。"""
+    """确定性产出生效规范集。country: CN/EU/JP/US；structure_type: building/gravity_dam/sluice…；
+    na: EC 国别 National Annex(如 DE)。"""
+    if country.upper() == "CN" and structure_type in _HYDRAULIC:
+        return _CN_HYDRAULIC
     cs = _TABLE.get(country.upper())
     if cs is None:
         raise ValueError(f"未知辖区: {country}（已支持 {', '.join(_TABLE)}）")

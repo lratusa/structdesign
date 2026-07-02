@@ -52,7 +52,13 @@
 `heng/bridge.py::member_scan` 逐柱/墙/梁投影为 ctx 跑规则，**每条判定带条文出处**(玻璃盒到构件层)；
 超限构件被标出且可溯源到具体条文。测试 `test_heng_member` 5/5。规则总数 11(CN10+EU1)，规范库 CI 全过。
 
-**当前套件：modeler 25 文件 + core+heng 39 文件(原30+钢结构+heng 8文件40测试) 全绿。**
+### 双规范并行对照报告 —— ✅ 完成(2026-07-03)
+`heng/dualcode.py`(§4.4 跨国杀手锏)：Rule 加 `concept` 概念标签；同一上下文两套规范各自独立校核、按概念配对，输出逐条对照(各自条文/判定/控制限值/差异说明)，**映射仅解释差异不换算**。示例：梁最小配筋率 中国8.5.1(0.20%) vs Eurocode 9.2.1.1(0.26fctm/fyk)。测试 `test_heng_dualcode` 4/4。
+
+### 水工规范包 seed —— ✅ 完成(2026-07-03，设计书 §7 差异化主场)
+`heng/codes/rules_cn_sl_nb.py`：把规范引擎从建筑扩到**水工**域(新增 gravity_dam/sluice 构件类型)——重力坝坝基抗滑(NB/T 35026 抗剪断公式)、水闸抗浮/抗滑(SL 265)，均强条+手算基准。辖区解析器按 structure_type 返回**水工规范集**(SL/NB)。测试 `test_heng_hydraulic` 5/5。**规范引擎现覆盖建筑+水工双域、14 条规则、2 辖区。**
+
+**当前套件：modeler 25 文件 + core+heng 41 文件(原30+钢结构+heng 10文件49测试) 全绿。**
 
 ### 下一步（roadmap 对齐，均为设计书 Phase2/3 的大工程）
 - 把 analyze.checks_table 正式改由 `heng_scan` 产出(计算书每个数字点击→依据链)。

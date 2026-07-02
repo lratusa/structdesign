@@ -3,9 +3,10 @@ from __future__ import annotations
 from typing import List
 from .rule import Rule, CheckResult, check
 from .rules_cn_gb import RULES_CN_GB
+from .rules_cn_sl_nb import RULES_CN_SL_NB
 from .rules_eu_ec import RULES_EU_EC
 
-_ALL: List[Rule] = list(RULES_CN_GB) + list(RULES_EU_EC)
+_ALL: List[Rule] = list(RULES_CN_GB) + list(RULES_CN_SL_NB) + list(RULES_EU_EC)
 REGISTRY = {r.rule_id: r for r in _ALL}
 
 
