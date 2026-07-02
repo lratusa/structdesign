@@ -46,7 +46,12 @@ def dual_code_report(ctx: dict, jur_a: str = "CN", jur_b: str = "EU", na_b: str 
             if abs(a["limit"] - b["limit"]) < 1e-9:
                 note = "两规范限值一致"
             else:
-                gov = jur_a if a["limit"] > b["limit"] else jur_b     # 限值越严越控制(以下限类为例)
+                # 下限类(_min)大者严；上限类(_lim/_max)小者严
+                lower_bound = (a["limit_name"] or "").endswith("_min")
+                if lower_bound:
+                    gov = jur_a if a["limit"] > b["limit"] else jur_b
+                else:
+                    gov = jur_a if a["limit"] < b["limit"] else jur_b
                 note = f"限值不同（{jur_a}={a['limit']:.4g} vs {jur_b}={b['limit']:.4g}），{gov} 更严控制"
         elif a and not b:
             note = f"仅 {jur_a} 有对应条文"

@@ -44,6 +44,7 @@ RULES_CN_GB = [
     Rule(
         rule_id="CN.GB50011-2010(2016).5.5.1",
         title="多遇地震下弹性层间位移角限值",
+        concept="story_drift",
         scope={"element": ["story"]},
         formula={
             "assign": ["theta_lim = 1/550 if system=='frame' else 1/800"],
