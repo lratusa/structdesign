@@ -1312,9 +1312,12 @@ class MainWindow(QtWidgets.QMainWindow):
             self._sync_params()
             from heng.review import review_package, render_markdown
             from heng.calcsection import compliance_section
+            from heng import redline
             jur = getattr(self.project, "jurisdiction", "CN")
             pkg = review_package(self.result, self.project, jur)      # 送审包(未签名=AI起草)
+            audit = redline.zero_miss_audit()                        # §15 辅助指标:强条漏检数
             md = (render_markdown(pkg) + "\n\n---\n\n"
+                  + redline.render_markdown(audit) + "\n\n---\n\n"
                   + compliance_section(self.result, self.project, jur))
             out = (os.path.dirname(self.result.calcbook_md)
                    if self.result.calcbook_md else os.getcwd())
@@ -1331,6 +1334,9 @@ class MainWindow(QtWidgets.QMainWindow):
         QtWidgets.QMessageBox.information(
             self, "「衡」规范审查",
             f"辖区 <b>{pkg['jurisdiction']}</b>　强条自查 {n} 项，不满足 {bad} 项<br>{head}<br>"
+            f"引擎强条覆盖 {audit['mandatory_total']} 条，"
+            f"<b>强条漏检数 = {audit['miss_count']}</b>"
+            f"（{'✔ 零漏检达标' if audit['zero_miss'] else '✗ 未达标'}，§15 辅助北极星指标）<br>"
             f"送审快照：<code>{pkg['ssm_commit']}</code>（{'已签名' if pkg['signed'] else '未签名·AI起草待确认'}）<br><br>"
             f"逐条溯源审查表已生成，每个判定可点击溯源至 rule_id 条文原文。")
         QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(fp))
