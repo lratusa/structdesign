@@ -21,9 +21,9 @@ class CodeSet:
 
 # 各国 Eurocode National Annex 参数(NDP)——演示：EN1992 最小配筋系数
 NDP = {
-    "EU-recommended": {"ndp_kc1": 0.26, "ndp_kc2": 0.0013},
-    "DE": {"ndp_kc1": 0.26, "ndp_kc2": 0.0013},        # 德国 NA(示例，与推荐值同)
-    "GB-UK": {"ndp_kc1": 0.26, "ndp_kc2": 0.0013},
+    "EU-recommended": {"ndp_kc1": 0.26, "ndp_kc2": 0.0013, "ndp_asmax": 0.04},
+    "DE": {"ndp_kc1": 0.26, "ndp_kc2": 0.0013, "ndp_asmax": 0.04},        # 德国 NA(示例，与推荐值同)
+    "GB-UK": {"ndp_kc1": 0.26, "ndp_kc2": 0.0013, "ndp_asmax": 0.04},
 }
 
 # 辖区规范表(建筑结构；水工/日本/北美后续扩展)
